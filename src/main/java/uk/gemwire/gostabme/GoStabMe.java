@@ -93,6 +93,14 @@ public class GoStabMe {
             playerIn.attackEntityFrom(DamageSource.CACTUS, 4);
             return ActionResult.resultSuccess(ItemStack.EMPTY);
         }
+
+        @Override
+        public boolean onLeftClickEntity(ItemStack stack, PlayerEntity player, Entity entity) {
+            if(entity instanceof PlayerEntity) {
+                ((PlayerEntity) entity).getCapability(STABBED).ifPresent(cap -> cap.setStabbed(true));
+            }
+            return false;
+        }
     });
 
     /**
@@ -247,9 +255,11 @@ public class GoStabMe {
                     stack.rotate(Vector3f.YN.rotationDegrees(netHeadYaw));
                     stack.rotate(Vector3f.ZN.rotationDegrees(headPitch));
                     Minecraft.getInstance().getTextureManager().bindTexture(AtlasTexture.LOCATION_BLOCKS_TEXTURE);
-                    if (BAKED_KNIFE != null) {
-                        mc.getBlockRendererDispatcher().getBlockModelRenderer().renderModelBrightnessColor(stack.getLast(), buffer.getBuffer(RenderType.getCutout()), null, BAKED_KNIFE, 1f, 1f, 1f, packedLightIn, OverlayTexture.NO_OVERLAY);
-                    }
+                    entitylivingbaseIn.getCapability(STABBED).ifPresent(cap -> {
+                        if (BAKED_KNIFE != null && cap.isStabbed()) {
+                            mc.getBlockRendererDispatcher().getBlockModelRenderer().renderModelBrightnessColor(stack.getLast(), buffer.getBuffer(RenderType.getCutout()), null, BAKED_KNIFE, 1f, 1f, 1f, packedLightIn, OverlayTexture.NO_OVERLAY);
+                        }
+                    });
                     stack.pop();
                 }
             };
