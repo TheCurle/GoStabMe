@@ -36,12 +36,16 @@ import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.RegistryObject;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -72,6 +76,16 @@ public class GoStabMe {
      */
     public static final String ID = "gostabme";
 
+    /**
+     * The list of stabbable players
+     * Usernames as of 02/02/2021
+     */
+
+    private static final List<String> UUIDs = new ArrayList() {{
+        add("9186b2cf-ae1f-4d69-aa67-81a7cb69008d"); // AshersLab
+        add("6fbc9b18-0364-49a8-95d8-32f8b80319b0"); // RavenBuilder934
+    }};
+
     /************************************************************************************************
      *                                    R E G I S T R Y                                           *
      ************************************************************************************************/
@@ -91,7 +105,7 @@ public class GoStabMe {
         @Override
         public ActionResult<ItemStack> onItemRightClick(World worldIn, PlayerEntity playerIn, Hand handIn) {
             playerIn.attackEntityFrom(DamageSource.CACTUS, 4);
-            return ActionResult.resultSuccess(ItemStack.EMPTY);
+            return ActionResult.resultSuccess(playerIn.getHeldItem(handIn));
         }
 
         @Override
@@ -126,11 +140,12 @@ public class GoStabMe {
          */
         ITEMS.register(FMLJavaModLoadingContext.get().getModEventBus());
 
+
         /**
          * On the client, set up the knife model and prepare the render layers.
          */
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ModelLoader.addSpecialModel(new ResourceLocation(ID, "block/headknife")));
-        DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> this::handleKnife);
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> handleKnife());
 
         /**
          * CAPABILIIES
@@ -139,20 +154,22 @@ public class GoStabMe {
          *
          * It merely saves the boolean into the tag named "stabbed". Nothing fancy.
          */
-        CapabilityManager.INSTANCE.register(IStabbed.class, new Capability.IStorage<IStabbed>() {
-            @Nullable
-            @Override
-            public INBT writeNBT(Capability<IStabbed> capability, IStabbed instance, Direction side) {
-                CompoundNBT tag = new CompoundNBT();
-                tag.putBoolean("stabbed", instance.isStabbed());
-                return tag;
-            }
+        MinecraftForge.EVENT_BUS.<FMLCommonSetupEvent>addListener(event ->
+            CapabilityManager.INSTANCE.register(IStabbed.class, new Capability.IStorage<IStabbed>() {
+               @Nullable
+               @Override
+               public INBT writeNBT(Capability<IStabbed> capability, IStabbed instance, Direction side) {
+                   CompoundNBT tag = new CompoundNBT();
+                    tag.putBoolean("stabbed", instance.isStabbed());
+                    return tag;
+                }
 
-            @Override
-            public void readNBT(Capability<IStabbed> capability, IStabbed instance, Direction side, INBT nbt) {
-                instance.setStabbed(((CompoundNBT)nbt).getBoolean("stabbed"));
-            }
-        }, StabbedProvider::new);
+                @Override
+                public void readNBT(Capability<IStabbed> capability, IStabbed instance, Direction side, INBT nbt) {
+                    instance.setStabbed(((CompoundNBT)nbt).getBoolean("stabbed"));
+                }
+            }, StabbedProvider::new)
+        );
 
         /**
          * Add an event handler for the AttachCapabilities event,
@@ -162,39 +179,43 @@ public class GoStabMe {
          *
          * and save these with the event.addCapability & event.addListener functions.
          */
-        MinecraftForge.EVENT_BUS.<AttachCapabilitiesEvent<Entity>>addListener(event -> {
-            if(event.getObject() instanceof PlayerEntity) {
-                IStabbedCodec<CompoundNBT> stabbedCodec = new IStabbedCodec<CompoundNBT>() {
+        MinecraftForge.EVENT_BUS.addGenericListener(Entity.class, e -> {
 
-                    private final StabbedProvider stabbed = new StabbedProvider();
-                    private final LazyOptional<IStabbed> optionallyStabbed = LazyOptional.of(() -> stabbed);
+            if(e.getGenericType().equals(AttachCapabilitiesEvent.class)) {
+                AttachCapabilitiesEvent event = (AttachCapabilitiesEvent) e;
+                if (event.getObject() instanceof PlayerEntity) {
+                    IStabbedCodec<CompoundNBT> stabbedCodec = new IStabbedCodec<CompoundNBT>() {
 
-                    public void invalidate() {
-                        optionallyStabbed.invalidate();
-                    }
+                        private final StabbedProvider stabbed = new StabbedProvider();
+                        private final LazyOptional<IStabbed> optionallyStabbed = LazyOptional.of(() -> stabbed);
 
-                    @Nonnull
-                    @Override
-                    public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
-                        return cap == STABBED ? optionallyStabbed.cast() : LazyOptional.empty();
-                    }
+                        public void invalidate() {
+                            optionallyStabbed.invalidate();
+                        }
 
-                    @Override
-                    public CompoundNBT serializeNBT() {
-                        return STABBED == null ? new CompoundNBT() :
-                                (CompoundNBT) STABBED.writeNBT(stabbed, null);
+                        @Nonnull
+                        @Override
+                        public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
+                            return cap == STABBED ? optionallyStabbed.cast() : LazyOptional.empty();
+                        }
 
-                    }
+                        @Override
+                        public CompoundNBT serializeNBT() {
+                            return STABBED == null ? new CompoundNBT() :
+                                    (CompoundNBT) STABBED.writeNBT(stabbed, null);
 
-                    @Override
-                    public void deserializeNBT(CompoundNBT nbt) {
-                        if(STABBED != null)
-                            STABBED.readNBT(stabbed, null, nbt);
-                    }
-                };
+                        }
 
-                event.addCapability(new ResourceLocation(ID, "stabbed"), stabbedCodec);
-                event.addListener(stabbedCodec::invalidate);
+                        @Override
+                        public void deserializeNBT(CompoundNBT nbt) {
+                            if (STABBED != null)
+                                STABBED.readNBT(stabbed, null, nbt);
+                        }
+                    };
+
+                    event.addCapability(new ResourceLocation(ID, "stabbed"), stabbedCodec);
+                    event.addListener(stabbedCodec::invalidate);
+                }
             }
         });
 
@@ -235,41 +256,45 @@ public class GoStabMe {
 
         Minecraft mc = Minecraft.getInstance();
 
-        /**
-         * If the player is AshersLab..
-         */
-        if(mc.player.getUniqueID() == UUID.fromString("9186b2cf-ae1f-4d69-aa67-81a7cb69008d")) {
-            EntityRendererManager erm = mc.getRenderManager();
-            /**
-             * Prepare a LayerRenderer that attaches a block to the top of his head..
-             */
-            LayerRenderer<AbstractClientPlayerEntity, PlayerModel<AbstractClientPlayerEntity>> renderer = new LayerRenderer<AbstractClientPlayerEntity, PlayerModel<AbstractClientPlayerEntity>>(mc.getRenderManager().playerRenderer) {
-                @Override
-                public void render(MatrixStack stack, IRenderTypeBuffer buffer, int packedLightIn, AbstractClientPlayerEntity entitylivingbaseIn, float limbSwing, float limbSwingAmount, float partialTicks, float ageInTicks, float netHeadYaw, float headPitch) {
-                    stack.push();
-                    stack.translate(0, -0.015f, 0);
-                    if (!entitylivingbaseIn.inventory.armorInventory.get(3).isEmpty()) stack.translate(0, -0.02f, 0);
-                    if (entitylivingbaseIn.isCrouching()) stack.translate(0, 0.27f, 0);
-                    stack.rotate(Vector3f.YP.rotationDegrees(90));
-                    stack.rotate(Vector3f.XP.rotationDegrees(180));
-                    stack.rotate(Vector3f.YN.rotationDegrees(netHeadYaw));
-                    stack.rotate(Vector3f.ZN.rotationDegrees(headPitch));
-                    Minecraft.getInstance().getTextureManager().bindTexture(AtlasTexture.LOCATION_BLOCKS_TEXTURE);
-                    entitylivingbaseIn.getCapability(STABBED).ifPresent(cap -> {
-                        if (BAKED_KNIFE != null && cap.isStabbed()) {
-                            mc.getBlockRendererDispatcher().getBlockModelRenderer().renderModelBrightnessColor(stack.getLast(), buffer.getBuffer(RenderType.getCutout()), null, BAKED_KNIFE, 1f, 1f, 1f, packedLightIn, OverlayTexture.NO_OVERLAY);
-                        }
-                    });
-                    stack.pop();
-                }
-            };
 
+        MinecraftForge.EVENT_BUS.<FMLClientSetupEvent>addListener(event -> {
             /**
-             * And add it to his model.
+             * If the player is in the list..
              */
-            erm.getSkinMap().get("default").addLayer(renderer);
-            erm.getSkinMap().get("slim").addLayer(renderer);
-        }
+            if (UUIDs.contains(mc.getSession().getPlayerID())) {
+                EntityRendererManager erm = mc.getRenderManager();
+                /**
+                 * Prepare a LayerRenderer that attaches a block to the top of his head..
+                 */
+                LayerRenderer<AbstractClientPlayerEntity, PlayerModel<AbstractClientPlayerEntity>> renderer = new LayerRenderer<AbstractClientPlayerEntity, PlayerModel<AbstractClientPlayerEntity>>(mc.getRenderManager().playerRenderer) {
+                    @Override
+                    public void render(MatrixStack stack, IRenderTypeBuffer buffer, int packedLightIn, AbstractClientPlayerEntity entitylivingbaseIn, float limbSwing, float limbSwingAmount, float partialTicks, float ageInTicks, float netHeadYaw, float headPitch) {
+                        stack.push();
+                        stack.translate(0, -0.015f, 0);
+                        if (!entitylivingbaseIn.inventory.armorInventory.get(3).isEmpty())
+                            stack.translate(0, -0.02f, 0);
+                        if (entitylivingbaseIn.isCrouching()) stack.translate(0, 0.27f, 0);
+                        stack.rotate(Vector3f.YP.rotationDegrees(90));
+                        stack.rotate(Vector3f.XP.rotationDegrees(180));
+                        stack.rotate(Vector3f.YN.rotationDegrees(netHeadYaw));
+                        stack.rotate(Vector3f.ZN.rotationDegrees(headPitch));
+                        Minecraft.getInstance().getTextureManager().bindTexture(AtlasTexture.LOCATION_BLOCKS_TEXTURE);
+                        entitylivingbaseIn.getCapability(STABBED).ifPresent(cap -> {
+                            if (BAKED_KNIFE != null && cap.isStabbed()) {
+                                mc.getBlockRendererDispatcher().getBlockModelRenderer().renderModelBrightnessColor(stack.getLast(), buffer.getBuffer(RenderType.getCutout()), null, BAKED_KNIFE, 1f, 1f, 1f, packedLightIn, OverlayTexture.NO_OVERLAY);
+                            }
+                        });
+                        stack.pop();
+                    }
+                };
+
+                /**
+                 * And add it to his model.
+                 */
+                erm.getSkinMap().get("default").addLayer(renderer);
+                erm.getSkinMap().get("slim").addLayer(renderer);
+            }
+        });
 
         return false;
     }
