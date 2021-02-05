@@ -3,7 +3,7 @@
 		"0": "gostabme:block/knife_blade",
 		"1": "gostabme:block/knife_handle_sides",
 		"2": "gostabme:block/knife_handle_edges",
-		"particle": "block/texture"
+		"particle": "gostabme:block/knife_blade"
 	},
 	"elements": [
 		{

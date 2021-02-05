@@ -2,6 +2,6 @@
   "parent": "item/handheld",
 
   "textures": {
-    "layer0": "gostabme:items/noodles.png"
+    "layer0": "gostabme:item/noodles"
   }
 }

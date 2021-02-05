@@ -2,6 +2,6 @@
   "parent": "item/handheld",
 
   "textures": {
-    "layer0": "gostabme:textures/item/knife.png"
+    "layer0": "gostabme:item/knife"
   }
 }
